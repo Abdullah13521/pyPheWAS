@@ -45,6 +45,10 @@ def get_codes(filename):
 		data_col = 'ICD9'
 		new_data_col = 'ICD_CODE'
 		phecode_col = 'PheCode'
+	elif 'icd10cm' in filename:
+		data_col = 'icd10cm'
+		new_data_col = 'ICD_CODE'
+		phecode_col = 'PheCode'
 	elif 'icd10' in filename:
 		data_col = 'ICD10'
 		new_data_col = 'ICD_CODE'
@@ -110,26 +114,54 @@ def get_icd_codes(path, filename, reg_type):
 	wholefname = path / filename
 	icdfile = pd.read_csv(wholefname,dtype={'ICD_CODE':str})
 	icdfile['ICD_CODE'] = icdfile['ICD_CODE'].str.strip()
-	icd_types = np.unique(icdfile['ICD_TYPE'])
+	icd_types = np.unique(icdfile['ICD_TYPE']).astype(str)
 
 	# check ICD types present in file
-	if not all((icd_types == 9) | (icd_types == 10)):
-		raise Exception('Found an ICD_TYPE that was not 9 or 10 - Please check phenotype file.')
-	
+	for icd in icd_types:
+		if not (icd == '9' or icd == '10' or icd == '10cm'):
+			raise Exception('Found an ICD_TYPE that was not 9 or 10 or 10cm - Please check phenotype file.')
+
 	# merge with Phecode table, depends on which type(s) of ICD codes are in the icd file
-	if icd_types.shape[0] == 2:
-		print('Found both ICD-9 and ICD-10 codes.')
-		icd9s = icdfile[icdfile['ICD_TYPE'] == 9]
-		icd10s = icdfile[icdfile['ICD_TYPE'] == 10]
+	if icd_types.shape[0] == 3:
+		print('Found ICD-9, ICD-10 and ICD-10CM codes.')
+		icd9s = icdfile[icdfile['ICD_TYPE'] == '9']
+		icd10s = icdfile[icdfile['ICD_TYPE'] == '10']
+		icd10cms = icdfile[icdfile['ICD_TYPE'] == '10cm']
 		phenotypes_9 = pd.merge(icd9s, icd9_codes,on='ICD_CODE',how='left')
 		phenotypes_10 = pd.merge(icd10s, icd10_codes, on='ICD_CODE',how='left')
-		phenotypes = pd.concat([phenotypes_9, phenotypes_10], sort=False, ignore_index=True)
-	elif icd_types[0] == 9:
+		phenotypes_10cm = pd.merge(icd10cms, icd10cm_codes, on='ICD_CODE', how='left')
+		phenotypes = pd.concat([phenotypes_9, phenotypes_10, phenotypes_10cm], sort=False, ignore_index=True)
+	elif icd_types.shape[0] == 2:
+		if not (icd_types[0] == '10cm' or icd_types[1] == '10cm'):
+			print('Found both ICD-9 and ICD-10 codes.')
+			icd9s = icdfile[icdfile['ICD_TYPE'] == 9]
+			icd10s = icdfile[icdfile['ICD_TYPE'] == 10]
+			phenotypes_9 = pd.merge(icd9s, icd9_codes,on='ICD_CODE',how='left')
+			phenotypes_10 = pd.merge(icd10s, icd10_codes, on='ICD_CODE',how='left')
+			phenotypes = pd.concat([phenotypes_9, phenotypes_10], sort=False, ignore_index=True)
+		elif not (icd_types[0] == '10' or icd_types[1] == '10'):
+			print('Found both ICD-9 and ICD-10CM codes.')
+			icd9s = icdfile[icdfile['ICD_TYPE'] == '9']
+			icd10cms = icdfile[icdfile['ICD_TYPE'] == '10cm']
+			phenotypes_9 = pd.merge(icd9s, icd9_codes,on='ICD_CODE',how='left')
+			phenotypes_10cm = pd.merge(icd10cms, icd10cm_codes, on='ICD_CODE',how='left')
+			phenotypes = pd.concat([phenotypes_9, phenotypes_10cm], sort=False, ignore_index=True)
+		else:
+			print('Found both ICD-10 and ICD-10CM codes.')
+			icd10s = icdfile[icdfile['ICD_TYPE'] == '10']
+			icd10cms = icdfile[icdfile['ICD_TYPE'] == '10cm']
+			phenotypes_10 = pd.merge(icd10s, icd10_codes, on='ICD_CODE', how='left')
+			phenotypes_10cm = pd.merge(icd10cms, icd10cm_codes, on='ICD_CODE',how='left')
+			phenotypes = pd.concat([phenotypes_10, phenotypes_10cm], sort=False, ignore_index=True)
+	elif icd_types[0] == '9':
 		print('Found only ICD-9 codes.')
 		phenotypes = pd.merge(icdfile,icd9_codes,on='ICD_CODE',how='left')
-	elif icd_types[0] == 10:
+	elif icd_types[0] == '10':
 		print('Found only ICD-10 codes.')
 		phenotypes = pd.merge(icdfile, icd10_codes, on='ICD_CODE',how='left')
+	elif icd_types[0] == '10cm':
+		print('Found only ICD-10CM codes.')
+		phenotypes = pd.merge(icdfile, icd10cm_codes, on='ICD_CODE', how='left')
 	else:
 		raise Exception('An issue occurred while parsing the ICD_TYPE column - Please check phenotype file.')
 
@@ -836,7 +868,7 @@ def plot_manhattan(regressions, thresh, code_type='ICD', show_imbalance=True, pl
 	if save:
 		plt.savefig(save, format = save_format, bbox_extra_artists = artists, bbox_inches ='tight', dpi = 300)
 		plt.close()
-	
+
 	return
 
 
@@ -1112,6 +1144,7 @@ matplotlib.rcParams['ps.fonttype'] = 42
 # load ICD maps (pyPheWAS)
 icd9_codes = get_codes('phecode_map_v1_2_icd9.csv')
 icd10_codes = get_codes('phecode_map_v1_2_icd10_beta.csv')
+icd10cm_codes = get_codes('phecode_map_v1_2_icd10cm_beta.csv')
 # load CPT maps (pyProWAS)
 cpt_codes = get_codes('prowas_codes.csv')
 #----------------------------------------------------------
